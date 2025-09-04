@@ -4,15 +4,21 @@ public class FactoryBuilding : Building
 {
     void Start()
     {
-        // Устанавливаем параметры для фабрики
         buildCost = 70;
-        goodsEffect = 8; // Фабрика производит товары
-        moneyEffect = -5; // Но требует содержания (деньги уходят)
-        happinessEffect = -0.5f; // И немного снижает настроение (загрязнение)
+        goodsEffect = 10; // Производит товары
+        moneyEffect = -3; // Требует содержания
+        happinessEffect = -0.7f; // Загрязнение
+    }
+
+    public override void ApplyProductionEffects()
+    {
+        GameManager.Instance.AddGoods(goodsEffect);
+        GameManager.Instance.AddMoney(moneyEffect);
+        GameManager.Instance.AddHappiness(happinessEffect);
     }
 
     public override string GetInfo()
     {
-        return "ФАБРИКА\n" + base.GetInfo();
+        return "ФАБРИКА\n" + base.GetInfo() + $"\n(Производит товары, но снижает настроение)";
     }
 }

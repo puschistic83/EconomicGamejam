@@ -4,14 +4,19 @@ public class HouseBuilding : Building
 {
     void Start()
     {
-        // Устанавливаем параметры для дома
         buildCost = 40;
-        goodsEffect = -2; // Дом потребляет товары
-        happinessEffect = 1.2f; // И производит настроение
+        goodsEffect = -3; // Потребляет товары
+        happinessEffect = 1.5f; // Производит настроение
+    }
+
+    public override void ApplyProductionEffects()
+    {
+        GameManager.Instance.AddGoods(goodsEffect);
+        GameManager.Instance.AddHappiness(happinessEffect);
     }
 
     public override string GetInfo()
     {
-        return "ЖИЛОЙ ДОМ\n" + base.GetInfo();
+        return "ЖИЛОЙ ДОМ\n" + base.GetInfo() + $"\n(Повышает настроение, но требует товаров)";
     }
 }
