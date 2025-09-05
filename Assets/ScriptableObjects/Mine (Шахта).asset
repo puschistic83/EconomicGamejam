@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f656183e383483b4a9275b3ca7f7f46e, type: 3}
+  m_Name: "Mine (\u0428\u0430\u0445\u0442\u0430)"
+  m_EditorClassIdentifier: 
+  buildingName: 
+  description: 
+  woodCost: 60
+  oreCost: 20
+  goldCost: 0
+  foodCost: 0
+  woodProduction: 0
+  oreProduction: 4
+  goldProduction: 0
+  foodProduction: 0
+  woodConsumption: 0
+  oreConsumption: 0
+  foodConsumption: 0
+  maxWorkers: 5
+  buildTime: 0
+  buildingSprite: {fileID: 0}
+  buildingPrefab: {fileID: 6693364750050354018, guid: d7661a5693873f940ac09c2528f0267a, type: 3}
