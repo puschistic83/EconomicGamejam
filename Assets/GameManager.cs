@@ -1,22 +1,41 @@
-using System.Collections.Generic;
+п»їusing System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
 using TMPro;
+
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance;
 
-    // Ресурсы
-    public int Money { get; set; } = 200;
-    public int Goods { get; set; } = 50;
+    // Р РµСЃСѓСЂСЃС‹
+    public int Money { get; set; } = 300;
+    public int Goods { get; set; } = 30;
     public float Happiness { get; set; } = 70f;
-    public float InflationRate { get; set; } = 0.0f;
+    public float InflationRate { get; set; } = 0.05f;
 
-    [Header("Настройки игры")]
-    public float turnDuration = 10f; // Длительность одного хода в секундах
-    public float baseInflationEffect = 0.01f; // Базовое влияние на инфляцию
+    [Header("РќР°СЃС‚СЂРѕР№РєРё РёРіСЂС‹")]
+    public float turnDuration = 10f;
+    public float baseInflationEffect = 0.01f;
     private float turnTimer = 0f;
     private int turnCount = 0;
+
+    [Header("РќР°Р»РѕРіРѕРІР°СЏ СЃРёСЃС‚РµРјР°")]
+    public float taxRate = 0.15f;
+    public int taxCollectionTurnInterval = 3;
+    private int turnsSinceLastTaxCollection = 0;
+
+    [Header("РўРѕСЂРіРѕРІР°СЏ СЃРёСЃС‚РµРјР°")]
+    public int exportPricePerGood = 3;
+    public int importPricePerGood = 5;
+    public int autoExportThreshold = 50;
+
+    [Header("Р­РєРѕРЅРѕРјРёС‡РµСЃРєРёРµ РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹")]
+    public float interestRate = 0.05f;
+    public int subsidyAmount = 30;
+    public float printMoneyInflationEffect = 0.07f;
+    public float taxChangeHappinessEffect = 5f;
+    public float interestRateInvestmentEffect = 0.1f;
 
     [Header("UI Elements")]
     public TextMeshProUGUI moneyText;
@@ -25,12 +44,16 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI inflationText;
     public TextMeshProUGUI turnText;
     public Slider turnProgressSlider;
+    public TextMeshProUGUI taxRateText;
+    public TextMeshProUGUI interestRateText;
+    public TextMeshProUGUI nextTaxText;
+    public TextMeshProUGUI maintenanceText;
 
     [Header("Building Prefabs")]
     public GameObject factoryPrefab;
     public GameObject housePrefab;
 
-    // Список всех построенных зданий
+    // РЎРїРёСЃРѕРє РІСЃРµС… РїРѕСЃС‚СЂРѕРµРЅРЅС‹С… Р·РґР°РЅРёР№
     private List<Building> allBuildings = new List<Building>();
 
     void Awake()
@@ -43,21 +66,25 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
+        // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј РєРЅРѕРїРєРё UI
+        InitializeUIButtons();
+
         UpdateUI();
-        Debug.Log("Игра началась! Строите фабрики для производства товаров.");
+        Debug.Log("РРіСЂР° РЅР°С‡Р°Р»Р°СЃСЊ! РЎР»РµРґРёС‚Рµ Р·Р° Р±Р°Р»Р°РЅСЃРѕРј РґРѕС…РѕРґРѕРІ Рё СЂР°СЃС…РѕРґРѕРІ.");
     }
 
     void Update()
     {
-        // Обновляем таймер хода
         UpdateTurnTimer();
     }
 
     void UpdateTurnTimer()
     {
         turnTimer += Time.deltaTime;
-        float progress = turnTimer / turnDuration;
-        turnProgressSlider.value = progress;
+        if (turnProgressSlider != null)
+        {
+            turnProgressSlider.value = turnTimer / turnDuration;
+        }
 
         if (turnTimer >= turnDuration)
         {
@@ -70,32 +97,78 @@ public class GameManager : MonoBehaviour
     {
         turnCount++;
 
-        // 1. Производим ресурсы со всех зданий
+        ApplyTaxes();
         ProduceResources();
-
-        // 2. Применяем инфляцию
+        HandleConsumption(); // в†ђ Р”РћР‘РђР’РР›Р Р—Р”Р•РЎР¬
+        HandleTrade();
         ApplyInflation();
+        PayMaintenanceCosts();
 
-        // 3. Обновляем UI
         UpdateUI();
 
-        // 4. Логируем информацию о ходе
-        Debug.Log($"Ход #{turnCount} завершен! " +
-                 $"Товары: {Goods} (+{CalculateTotalProduction()}), " +
-                 $"Инфляция: {InflationRate:P0}");
+        Debug.Log($"РҐРѕРґ #{turnCount} Р·Р°РІРµСЂС€РµРЅ! РўРѕРІР°СЂС‹: {Goods}, Р”РµРЅСЊРіРё: {Money}, РРЅС„Р»СЏС†РёСЏ: {InflationRate:P0}");
     }
 
-    int CalculateTotalProduction()
+    void ApplyTaxes()
     {
-        int total = 0;
-        if (allBuildings != null)
+        turnsSinceLastTaxCollection++;
+
+        if (turnsSinceLastTaxCollection >= taxCollectionTurnInterval)
         {
-            foreach (Building building in allBuildings)
+            CollectTaxes();
+            turnsSinceLastTaxCollection = 0;
+        }
+    }
+
+    void CollectTaxes()
+    {
+        int populationTax = CalculatePopulationTax();
+        int businessTax = CalculateBusinessTax();
+        int totalTax = populationTax + businessTax;
+
+        Money += totalTax;
+
+        Debug.Log($"РЎРѕР±СЂР°РЅРѕ РЅР°Р»РѕРіРѕРІ: {totalTax} (РќР°СЃРµР»РµРЅРёРµ: {populationTax}, Р‘РёР·РЅРµСЃ: {businessTax})");
+        ShowFloatingText($"РќР°Р»РѕРіРё: +{totalTax}", Color.green);
+    }
+
+    int CalculatePopulationTax()
+    {
+        int totalPopulation = 0;
+        foreach (Building building in allBuildings)
+        {
+            if (building is HouseBuilding)
             {
-                total += building.goodsEffect;
+                totalPopulation += 5;
             }
         }
-        return total;
+        return Mathf.RoundToInt(totalPopulation * taxRate * 10);
+    }
+
+    int CalculateBusinessTax()
+    {
+        int totalBusinessIncome = 0;
+        foreach (Building building in allBuildings)
+        {
+            if (building is FactoryBuilding)
+            {
+                totalBusinessIncome += Mathf.RoundToInt(building.goodsEffect * 2 * taxRate);
+            }
+        }
+        return totalBusinessIncome;
+    }
+
+    int CalculateNextMaintenance()
+    {
+        int totalMaintenance = 0;
+        foreach (Building building in allBuildings)
+        {
+            if (building is FactoryBuilding)
+                totalMaintenance += 2;
+            else if (building is HouseBuilding)
+                totalMaintenance += 1;
+        }
+        return totalMaintenance;
     }
 
     void ProduceResources()
@@ -108,74 +181,226 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    void HandleTrade()
+    {
+        if (Goods > autoExportThreshold)
+        {
+            int excessGoods = Goods - autoExportThreshold;
+            int exportAmount = Mathf.Min(excessGoods, 10);
+            int exportIncome = exportAmount * exportPricePerGood;
+
+            Goods -= exportAmount;
+            Money += exportIncome;
+
+            Debug.Log($"РђРІС‚Рѕ-СЌРєСЃРїРѕСЂС‚: {exportAmount} С‚РѕРІР°СЂРѕРІ в†’ +{exportIncome} РґРµРЅРµРі");
+        }
+    }
+
     void ApplyInflation()
     {
-        // Рассчитываем новую инфляцию на основе баланса денег и товаров
         CalculateNewInflation();
-
-        // Применяем эффекты инфляции к экономике
         ApplyInflationEffects();
     }
 
     void CalculateNewInflation()
     {
-        // Базовый расчет: соотношение денежной массы к товарам
-        if (Goods == 0) return; // Защита от деления на ноль
+        if (Goods == 0) return;
 
         float moneySupplyRatio = (float)Money / Goods;
-
-        // Формула инфляции: чем больше денег относительно товаров - тем выше инфляция
         float newInflation = moneySupplyRatio * baseInflationEffect;
 
-        // Плавное изменение инфляции
         InflationRate = Mathf.Lerp(InflationRate, newInflation, 0.1f);
-
-        // Ограничиваем диапазон инфляции (0% - 100%)
         InflationRate = Mathf.Clamp(InflationRate, 0f, 1f);
     }
 
     void ApplyInflationEffects()
     {
-        // 1. Инфляция "съедает" часть товаров (обесценивание)
         int inflationLoss = Mathf.RoundToInt(Goods * InflationRate * 0.3f);
         Goods = Mathf.Max(0, Goods - inflationLoss);
 
-        // 2. Инфляция снижает настроение населения
         float happinessLoss = InflationRate * 8f;
         Happiness = Mathf.Clamp(Happiness - happinessLoss, 0f, 100f);
+    }
 
-        // 3. Высокая инфляция снижает эффективность производства
-        if (InflationRate > 0.3f)
+    void PayMaintenanceCosts()
+    {
+        int totalMaintenance = CalculateNextMaintenance();
+
+        Money -= totalMaintenance;
+
+        if (totalMaintenance > 0)
         {
-            float productionPenalty = (InflationRate - 0.3f) * 0.5f;
-            // Можно применить штраф к зданиям в следующем ходу
+            Debug.Log($"Р Р°СЃС…РѕРґС‹ РЅР° СЃРѕРґРµСЂР¶Р°РЅРёРµ: -{totalMaintenance} РґРµРЅРµРі");
         }
     }
 
+    // Р­РєРѕРЅРѕРјРёС‡РµСЃРєРёРµ РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹
+    public void PrintMoney(int amount = 50)
+    {
+        Money += amount;
+        InflationRate += printMoneyInflationEffect;
+
+        Debug.Log($"РќР°РїРµС‡Р°С‚Р°РЅРѕ {amount} РґРµРЅРµРі. РРЅС„Р»СЏС†РёСЏ +{printMoneyInflationEffect:P0}");
+        ShowFloatingText($"+{amount} РґРµРЅРµРі\nРРЅС„Р»СЏС†РёСЏ +{printMoneyInflationEffect:P0}", Color.yellow);
+
+        UpdateUI();
+    }
+
+    public void AdjustTaxes(bool increase)
+    {
+        float oldTaxRate = taxRate;
+
+        if (increase)
+        {
+            taxRate = Mathf.Clamp(taxRate + 0.05f, 0.1f, 0.5f);
+            Money += Mathf.RoundToInt(Money * 0.1f);
+            Happiness -= taxChangeHappinessEffect;
+
+            Debug.Log($"РќР°Р»РѕРіРё РїРѕРІС‹С€РµРЅС‹ РґРѕ {taxRate:P0}");
+            ShowFloatingText($"РќР°Р»РѕРіРё в†‘\n+{Mathf.RoundToInt(Money * 0.1f)} РґРµРЅРµРі\nРќР°СЃС‚СЂРѕРµРЅРёРµ в†“", Color.red);
+        }
+        else
+        {
+            taxRate = Mathf.Clamp(taxRate - 0.05f, 0.1f, 0.5f);
+            Happiness += taxChangeHappinessEffect;
+
+            Debug.Log($"РќР°Р»РѕРіРё РїРѕРЅРёР¶РµРЅС‹ РґРѕ {taxRate:P0}");
+            ShowFloatingText($"РќР°Р»РѕРіРё в†“\nРќР°СЃС‚СЂРѕРµРЅРёРµ в†‘", Color.green);
+        }
+
+        UpdateUI();
+    }
+
+    public void GiveSubsidy()
+    {
+        if (Money < subsidyAmount)
+        {
+            Debug.Log("РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РґРµРЅРµРі РґР»СЏ СЃСѓР±СЃРёРґРёР№!");
+            return;
+        }
+
+        Money -= subsidyAmount;
+
+        foreach (Building building in allBuildings)
+        {
+            if (building.goodsEffect > 0)
+            {
+                building.goodsEffect += 2;
+            }
+        }
+
+        StartCoroutine(RemoveSubsidyEffect(3));
+
+        Debug.Log($"Р’С‹РґР°РЅС‹ СЃСѓР±СЃРёРґРёРё РїСЂРѕРёР·РІРѕРґСЃС‚РІР°! +2 Рє РїСЂРѕРёР·РІРѕРґСЃС‚РІСѓ РЅР° 3 С…РѕРґР°");
+        ShowFloatingText($"РЎСѓР±СЃРёРґРёРё!\nРџСЂРѕРёР·РІРѕРґСЃС‚РІРѕ в†‘", Color.blue);
+
+        UpdateUI();
+    }
+
+    private IEnumerator RemoveSubsidyEffect(int turns)
+    {
+        for (int i = 0; i < turns; i++)
+        {
+            yield return new WaitForSeconds(turnDuration);
+        }
+
+        foreach (Building building in allBuildings)
+        {
+            if (building.goodsEffect > 2)
+            {
+                building.goodsEffect -= 2;
+            }
+        }
+
+        Debug.Log("Р”РµР№СЃС‚РІРёРµ СЃСѓР±СЃРёРґРёР№ Р·Р°РєРѕРЅС‡РёР»РѕСЃСЊ");
+    }
+
+    public void AdjustInterestRates(bool increase)
+    {
+        float oldRate = interestRate;
+
+        if (increase)
+        {
+            interestRate = Mathf.Clamp(interestRate + 0.01f, 0.01f, 0.1f);
+            InflationRate -= 0.03f;
+            foreach (Building building in allBuildings)
+            {
+                building.goodsEffect = Mathf.RoundToInt(building.goodsEffect * 0.95f);
+            }
+
+            Debug.Log($"РЈС‡РµС‚РЅР°СЏ СЃС‚Р°РІРєР° РїРѕРІС‹С€РµРЅР° РґРѕ {interestRate:P0}");
+            ShowFloatingText($"РЎС‚Р°РІРєР° в†‘\nРРЅС„Р»СЏС†РёСЏ в†“\nРџСЂРѕРёР·РІРѕРґСЃС‚РІРѕ в†“", Color.cyan);
+        }
+        else
+        {
+            interestRate = Mathf.Clamp(interestRate - 0.01f, 0.01f, 0.1f);
+            InflationRate += 0.02f;
+            foreach (Building building in allBuildings)
+            {
+                building.goodsEffect = Mathf.RoundToInt(building.goodsEffect * 1.05f);
+            }
+
+            Debug.Log($"РЈС‡РµС‚РЅР°СЏ СЃС‚Р°РІРєР° РїРѕРЅРёР¶РµРЅР° РґРѕ {interestRate:P0}");
+            ShowFloatingText($"РЎС‚Р°РІРєР° в†“\nРџСЂРѕРёР·РІРѕРґСЃС‚РІРѕ в†‘\nРРЅС„Р»СЏС†РёСЏ в†‘", Color.magenta);
+        }
+
+        UpdateUI();
+    }
+
+    public void ExportGoods(int amount = 10)
+    {
+        if (Goods < amount)
+        {
+            Debug.Log("РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ С‚РѕРІР°СЂРѕРІ РґР»СЏ СЌРєСЃРїРѕСЂС‚Р°!");
+            return;
+        }
+
+        Goods -= amount;
+        Money += amount * exportPricePerGood;
+
+        Debug.Log($"Р­РєСЃРїРѕСЂС‚: {amount} С‚РѕРІР°СЂРѕРІ в†’ +{amount * exportPricePerGood} РґРµРЅРµРі");
+        ShowFloatingText($"Р­РєСЃРїРѕСЂС‚: +{amount * exportPricePerGood}", Color.blue);
+
+        UpdateUI();
+    }
+
+    public void ImportGoods(int amount = 10)
+    {
+        int cost = amount * importPricePerGood;
+
+        if (Money < cost)
+        {
+            Debug.Log("РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РґРµРЅРµРі РґР»СЏ РёРјРїРѕСЂС‚Р°!");
+            return;
+        }
+
+        Money -= cost;
+        Goods += amount;
+
+        Debug.Log($"РРјРїРѕСЂС‚: {amount} С‚РѕРІР°СЂРѕРІ в†’ -{cost} РґРµРЅРµРі");
+        ShowFloatingText($"РРјРїРѕСЂС‚: +{amount} С‚РѕРІР°СЂРѕРІ", Color.cyan);
+
+        UpdateUI();
+    }
+
+    // РЈРїСЂР°РІР»РµРЅРёРµ Р·РґР°РЅРёСЏРјРё
     public void AddBuildingToManager(Building building)
     {
         if (allBuildings == null)
             allBuildings = new List<Building>();
 
         allBuildings.Add(building);
-        Debug.Log($"Здание добавлено! Всего зданий: {allBuildings.Count}");
-    }
-
-    public void PrintMoney(int amount = 50)
-    {
-        Money += amount;
-        // Печать денег напрямую увеличивает инфляцию
-        InflationRate += 0.07f;
-        Debug.Log($"Напечатано {amount} денег. Инфляция +7%");
+        Debug.Log($"Р—РґР°РЅРёРµ РґРѕР±Р°РІР»РµРЅРѕ! Р’СЃРµРіРѕ Р·РґР°РЅРёР№: {allBuildings.Count}");
         UpdateUI();
     }
 
+    // РЈРїСЂР°РІР»РµРЅРёРµ СЂРµСЃСѓСЂСЃР°РјРё
     public void AddMoney(int amount)
     {
         int newMoney = Money + amount;
         if (newMoney < 0)
         {
-            Debug.LogWarning("Попытка уйти в отрицательный баланс!");
+            Debug.LogWarning("РџРѕРїС‹С‚РєР° СѓР№С‚Рё РІ РѕС‚СЂРёС†Р°С‚РµР»СЊРЅС‹Р№ Р±Р°Р»Р°РЅСЃ!");
             return;
         }
         Money = newMoney;
@@ -191,34 +416,207 @@ public class GameManager : MonoBehaviour
         Happiness = Mathf.Clamp(Happiness + amount, 0f, 100f);
     }
 
+    // UI
     public void UpdateUI()
     {
-        moneyText.text = $"Деньги: {Money}";
-        goodsText.text = $"Товары: {Goods}";
-        happinessText.text = $"Настроение: {Mathf.RoundToInt(Happiness)}%";
-        inflationText.text = $"Инфляция: {InflationRate:P0}";
-        turnText.text = $"Ход: {turnCount}";
+        if (this == null) return;
 
-        // Цветовая индикация инфляции
-        if (InflationRate > 0.3f)
-            inflationText.color = Color.red;
-        else if (InflationRate > 0.15f)
-            inflationText.color = Color.yellow;
-        else
-            inflationText.color = Color.green;
+        try
+        {
+            // РћСЃРЅРѕРІРЅС‹Рµ СЂРµСЃСѓСЂСЃС‹
+            if (moneyText != null) moneyText.text = $"Р”РµРЅСЊРіРё: {Money}";
+            if (goodsText != null) goodsText.text = $"РўРѕРІР°СЂС‹: {Goods}";
+            if (happinessText != null) happinessText.text = $"РќР°СЃС‚СЂРѕРµРЅРёРµ: {Mathf.RoundToInt(Happiness)}%";
+            if (inflationText != null) inflationText.text = $"РРЅС„Р»СЏС†РёСЏ: {InflationRate:P0}";
+            if (turnText != null) turnText.text = $"РҐРѕРґ: {turnCount}";
 
-        // Цветовая индикация настроения
-        if (Happiness < 30f)
-            happinessText.color = Color.red;
-        else if (Happiness < 60f)
-            happinessText.color = Color.yellow;
+            // Р­РєРѕРЅРѕРјРёС‡РµСЃРєРёРµ РїРѕРєР°Р·Р°С‚РµР»Рё
+            if (taxRateText != null) taxRateText.text = $"РќР°Р»РѕРіРё: {taxRate:P0}";
+            if (interestRateText != null) interestRateText.text = $"РЎС‚Р°РІРєР°: {interestRate:P0}";
+            if (nextTaxText != null) nextTaxText.text = $"РЎР»РµРґ. РЅР°Р»РѕРіРё: +{CalculatePopulationTax() + CalculateBusinessTax()}";
+            if (maintenanceText != null) maintenanceText.text = $"Р Р°СЃС…РѕРґС‹: -{CalculateNextMaintenance()}";
+
+            // РћР±РЅРѕРІР»СЏРµРј СЃРѕСЃС‚РѕСЏРЅРёРµ РєРЅРѕРїРѕРє
+            UpdateButtonsInteractable();
+
+            // Р¦РІРµС‚РѕРІР°СЏ РёРЅРґРёРєР°С†РёСЏ
+            UpdateTextColors();
+        }
+        catch (System.NullReferenceException e)
+        {
+            Debug.LogWarning($"UI update error: {e.Message}");
+        }
+
+        // РџРѕРєР°Р·С‹РІР°РµРј РїРѕС‚СЂРµР±Р»РµРЅРёРµ С‚РѕРІР°СЂРѕРІ
+        if (GameObject.Find("ConsumptionText") != null)
+        {
+            GameObject.Find("ConsumptionText").GetComponent<Text>().text =
+                $"РџРѕС‚СЂРµР±Р»РµРЅРёРµ: -{CalculateTotalConsumption()}";
+        }
+
+        // Р¦РІРµС‚РѕРІР°СЏ РёРЅРґРёРєР°С†РёСЏ РґРµС„РёС†РёС‚Р°
+        if (Goods < CalculateTotalConsumption())
+        {
+            if (goodsText != null) goodsText.color = Color.red;
+        }
         else
-            happinessText.color = Color.green;
+        {
+            if (goodsText != null) goodsText.color = Color.white;
+        }
     }
 
-    // Метод для кнопки печати денег
-    public void OnPrintMoneyButton()
+    void UpdateTextColors()
     {
-        PrintMoney(50);
+        if (inflationText != null)
+        {
+            if (InflationRate > 0.3f)
+                inflationText.color = Color.red;
+            else if (InflationRate > 0.15f)
+                inflationText.color = Color.yellow;
+            else
+                inflationText.color = Color.green;
+        }
+
+        if (happinessText != null)
+        {
+            if (Happiness < 30f)
+                happinessText.color = Color.red;
+            else if (Happiness < 60f)
+                happinessText.color = Color.yellow;
+            else
+                happinessText.color = Color.green;
+        }
+    }
+
+    void ShowFloatingText(string text, Color color)
+    {
+        Debug.Log(text);
+        // Р—РґРµСЃСЊ РјРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РІРёР·СѓР°Р»СЊРЅС‹Рµ СЌС„С„РµРєС‚С‹
+    }
+
+    // РњРµС‚РѕРґС‹ РґР»СЏ РєРЅРѕРїРѕРє UI
+    public void OnPrintMoneyButton() => PrintMoney(50);
+    public void OnTaxesUpButton() => AdjustTaxes(true);
+    public void OnTaxesDownButton() => AdjustTaxes(false);
+    public void OnSubsidiesButton() => GiveSubsidy();
+    public void OnInterestUpButton() => AdjustInterestRates(true);
+    public void OnInterestDownButton() => AdjustInterestRates(false);
+    public void OnExportButton() => ExportGoods(10);
+    public void OnImportButton() => ImportGoods(10);
+
+    // Р’ РєРѕРЅРµС† РєР»Р°СЃСЃР° GameManager РґРѕР±Р°РІРёРј:
+
+    [Header("UI РљРЅРѕРїРєРё РёРЅСЃС‚СЂСѓРјРµРЅС‚РѕРІ")]
+    public Button printMoneyButton;
+    public Button taxesUpButton;
+    public Button taxesDownButton;
+    public Button subsidiesButton;
+    public Button interestUpButton;
+    public Button interestDownButton;
+    public Button exportButton;
+    public Button importButton;
+
+    // РњРµС‚РѕРґ РґР»СЏ РёРЅРёС†РёР°Р»РёР·Р°С†РёРё РєРЅРѕРїРѕРє
+    public void InitializeUIButtons()
+    {
+        if (printMoneyButton != null)
+            printMoneyButton.onClick.AddListener(OnPrintMoneyButton);
+
+        if (taxesUpButton != null)
+            taxesUpButton.onClick.AddListener(OnTaxesUpButton);
+
+        if (taxesDownButton != null)
+            taxesDownButton.onClick.AddListener(OnTaxesDownButton);
+
+        if (subsidiesButton != null)
+            subsidiesButton.onClick.AddListener(OnSubsidiesButton);
+
+        if (interestUpButton != null)
+            interestUpButton.onClick.AddListener(OnInterestUpButton);
+
+        if (interestDownButton != null)
+            interestDownButton.onClick.AddListener(OnInterestDownButton);
+
+        if (exportButton != null)
+            exportButton.onClick.AddListener(OnExportButton);
+
+        if (importButton != null)
+            importButton.onClick.AddListener(OnImportButton);
+    }
+
+    // РњРµС‚РѕРґ РґР»СЏ РѕР±РЅРѕРІР»РµРЅРёСЏ СЃРѕСЃС‚РѕСЏРЅРёСЏ РєРЅРѕРїРѕРє (РґРѕСЃС‚СѓРїРЅРѕСЃС‚СЊ)
+    void UpdateButtonsInteractable()
+    {
+        // РџРµС‡Р°С‚СЊ РґРµРЅРµРі РІСЃРµРіРґР° РґРѕСЃС‚СѓРїРЅР°
+        if (printMoneyButton != null)
+            printMoneyButton.interactable = true;
+
+        // РЎСѓР±СЃРёРґРёРё С‚СЂРµР±СѓСЋС‚ РґРµРЅРµРі
+        if (subsidiesButton != null)
+            subsidiesButton.interactable = Money >= subsidyAmount;
+
+        // Р­РєСЃРїРѕСЂС‚ С‚СЂРµР±СѓРµС‚ С‚РѕРІР°СЂРѕРІ
+        if (exportButton != null)
+            exportButton.interactable = Goods >= 10;
+
+        // РРјРїРѕСЂС‚ С‚СЂРµР±СѓРµС‚ РґРµРЅРµРі
+        if (importButton != null)
+            importButton.interactable = Money >= importPricePerGood * 10;
+
+        // РќР°Р»РѕРіРё РјРѕР¶РЅРѕ С‚РѕР»СЊРєРѕ РїРѕРІС‹С€Р°С‚СЊ/РїРѕРЅРёР¶Р°С‚СЊ РІ РїСЂРµРґРµР»Р°С…
+        if (taxesUpButton != null)
+            taxesUpButton.interactable = taxRate < 0.5f;
+
+        if (taxesDownButton != null)
+            taxesDownButton.interactable = taxRate > 0.1f;
+
+        // РЈС‡РµС‚РЅС‹Рµ СЃС‚Р°РІРєРё С‚РѕР¶Рµ РѕРіСЂР°РЅРёС‡РµРЅС‹
+        if (interestUpButton != null)
+            interestUpButton.interactable = interestRate < 0.1f;
+
+        if (interestDownButton != null)
+            interestDownButton.interactable = interestRate > 0.01f;
+    }
+
+    // Р’ GameManager РґРѕР±Р°РІРёРј РјРµС‚РѕРґ РґР»СЏ РѕР±СЂР°Р±РѕС‚РєРё РїРѕС‚СЂРµР±Р»РµРЅРёСЏ
+    void HandleConsumption()
+    {
+        int totalConsumption = CalculateTotalConsumption();
+
+        if (Goods >= totalConsumption)
+        {
+            Goods -= totalConsumption;
+            if (totalConsumption > 0)
+            {
+                ShowFloatingText($"РџРѕС‚СЂРµР±Р»РµРЅРёРµ: -{totalConsumption}\nРќР°СЃРµР»РµРЅРёРµ РґРѕРІРѕР»СЊРЅРѕ", Color.green);
+            }
+        }
+        else
+        {
+            int deficit = totalConsumption - Goods;
+            Goods = 0;
+
+            float happinessPenalty = deficit * 0.3f;
+            AddHappiness(-happinessPenalty);
+
+            ShowFloatingText($"Р”Р•Р¤РР¦РРў!\nРќРµ С…РІР°С‚Р°РµС‚ {deficit} С‚РѕРІР°СЂРѕРІ\nРќР°СЃС‚СЂРѕРµРЅРёРµ -{happinessPenalty:F1}", Color.red);
+
+            // РћР±СЂР°Р·РѕРІР°С‚РµР»СЊРЅРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ
+            Debug.Log("рџ’Ў РћР±СЂР°Р·РѕРІР°С‚РµР»СЊРЅС‹Р№ РјРѕРјРµРЅС‚: РџСЂРё РґРµС„РёС†РёС‚Рµ С‚РѕРІР°СЂРѕРІ С†РµРЅС‹ СЂР°СЃС‚СѓС‚, " +
+                     "Р° РЅР°СЃРµР»РµРЅРёРµ РЅРµРґРѕРІРѕР»СЊРЅРѕ. Р­С‚Рѕ РїСЂРёРІРѕРґРёС‚ Рє РёРЅС„Р»СЏС†РёРё Рё СЃРѕС†РёР°Р»СЊРЅС‹Рј РїСЂРѕР±Р»РµРјР°Рј.");
+        }
+    }
+
+    int CalculateTotalConsumption()
+    {
+        int totalConsumption = 0;
+        foreach (Building building in allBuildings)
+        {
+            if (building is HouseBuilding && building.goodsEffect < 0)
+            {
+                totalConsumption += Mathf.Abs(building.goodsEffect);
+            }
+        }
+        return totalConsumption;
     }
 }
