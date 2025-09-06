@@ -4,10 +4,14 @@ using System;
 public class ResourceManager : MonoBehaviour
 {
     [Header("Starting Resources")]
-    public int startWood = 100;
-    public int startOre = 50;
-    public int startGold = 200;
-    public int startFood = 100;
+    public int startWood = 50;
+    public int startOre = 25;
+    public int startGold = 100;
+    public int startFood = 50;
+
+    [Header("Delivery Settings")]
+    public float deliveryRange = 15f; // Настраиваемый радиус в инспекторе
+    public bool requireMainBuilding = true; // Можно отключить требование главного здания
 
     [Header("Current Resources (Read Only)")]
     [SerializeField] private int _wood;
@@ -15,54 +19,24 @@ public class ResourceManager : MonoBehaviour
     [SerializeField] private int _gold;
     [SerializeField] private int _food;
 
-    // Событие для обновления UI
+    [Header("Main Building")]
+    public Building mainBuilding;
+
     public event Action OnResourcesUpdated;
+    public event Action OnMainBuildingChanged;
 
-    // Публичные свойства с вызовом события при изменении
-    public int wood
-    {
-        get => _wood;
-        private set
-        {
-            _wood = value;
-            OnResourcesUpdated?.Invoke();
-        }
-    }
+    public int wood { get => _wood; set { _wood = value; OnResourcesUpdated?.Invoke(); } }
+    public int ore { get => _ore; set { _ore = value; OnResourcesUpdated?.Invoke(); } }
+    public int gold { get => _gold; set { _gold = value; OnResourcesUpdated?.Invoke(); } }
+    public int food { get => _food; set { _food = value; OnResourcesUpdated?.Invoke(); } }
 
-    public int ore
-    {
-        get => _ore;
-        private set
-        {
-            _ore = value;
-            OnResourcesUpdated?.Invoke();
-        }
-    }
-
-    public int gold
-    {
-        get => _gold;
-        private set
-        {
-            _gold = value;
-            OnResourcesUpdated?.Invoke();
-        }
-    }
-
-    public int food
-    {
-        get => _food;
-        private set
-        {
-            _food = value;
-            OnResourcesUpdated?.Invoke();
-        }
-    }
+    public bool HasMainBuilding => mainBuilding != null;
+    public bool CanBuildWithoutMainBuilding => !requireMainBuilding;
 
     void Start()
     {
-        // Инициализируем ресурсы из настроек инспектора
         InitializeResources();
+        Debug.Log($"Delivery range set to: {deliveryRange}m");
     }
 
     public void InitializeResources()
@@ -71,13 +45,25 @@ public class ResourceManager : MonoBehaviour
         ore = startOre;
         gold = startGold;
         food = startFood;
-
-        Debug.Log($"Resources initialized: Wood={wood}, Ore={ore}, Gold={gold}, Food={food}");
     }
 
-    public void ResetToStartValues()
+    public void SetMainBuilding(Building building)
     {
-        InitializeResources();
+        mainBuilding = building;
+        OnMainBuildingChanged?.Invoke();
+        Debug.Log($"Main building set. Delivery range: {deliveryRange}m");
+    }
+
+    public bool CanBuildHere(Vector3 position)
+    {
+        // Если не требуется главное здание - можно строить везде
+        if (!requireMainBuilding) return true;
+
+        // Если требуется главное здание, но его нет - нельзя строить
+        if (!HasMainBuilding) return false;
+
+        // Проверяем расстояние до главного здания
+        return Vector3.Distance(position, mainBuilding.transform.position) <= deliveryRange;
     }
 
     public bool CanAfford(int woodCost, int oreCost, int goldCost, int foodCost)
@@ -105,19 +91,4 @@ public class ResourceManager : MonoBehaviour
         gold += goldAmount;
         food += foodAmount;
     }
-
-    // Метод для установки конкретных значений (например, для cheat-кодов или тестов)
-    public void SetResources(int newWood, int newOre, int newGold, int newFood)
-    {
-        wood = newWood;
-        ore = newOre;
-        gold = newGold;
-        food = newFood;
-    }
-
-    // Метод для проверки, достаточно ли ресурсов
-    public bool HasEnoughWood(int amount) => wood >= amount;
-    public bool HasEnoughOre(int amount) => ore >= amount;
-    public bool HasEnoughGold(int amount) => gold >= amount;
-    public bool HasEnoughFood(int amount) => food >= amount;
 }

@@ -22,7 +22,7 @@ MonoBehaviour:
   oreProduction: 4
   goldProduction: 0
   foodProduction: 0
-  woodConsumption: 0
+  woodConsumption: 2
   oreConsumption: 0
   foodConsumption: 0
   maxWorkers: 5

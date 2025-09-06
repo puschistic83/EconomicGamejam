@@ -10,6 +10,7 @@ public class ConstructionUI : MonoBehaviour
     public BuildingData farmData;
     public BuildingData mineData;
     public RoadData basicRoadData;
+    public BuildingData mainBuildingData;
 
     [Header("UI Buttons")]
     public Button btnHouse;
@@ -17,17 +18,21 @@ public class ConstructionUI : MonoBehaviour
     public Button btnFarm;
     public Button btnMine;
     public Button btnRoad;
+    public Button btnMainBuilding;
 
     private BuildingPlacementSystem buildingPlacementSystem;
+
+    private ResourceManager resourceManager;
+
 
     void Start()
     {
         buildingPlacementSystem = FindObjectOfType<BuildingPlacementSystem>();
+        resourceManager = FindObjectOfType<ResourceManager>();
 
-        if (buildingPlacementSystem == null)
+        if (resourceManager != null)
         {
-            Debug.LogError("BuildingPlacementSystem not found in scene!");
-            return;
+            resourceManager.OnResourcesUpdated += UpdateButtonsInteractability;
         }
 
         // Настраиваем кнопки
@@ -36,6 +41,15 @@ public class ConstructionUI : MonoBehaviour
         SetupButton(btnFarm, farmData, "Farm");
         SetupButton(btnMine, mineData, "Mine");
         SetupButton(btnRoad, basicRoadData, "Road");
+
+        // Делаем кнопку главного здания более заметной
+        if (btnMainBuilding != null)
+        {
+            btnMainBuilding.image.color = Color.yellow;
+            Text btnText = btnMainBuilding.GetComponentInChildren<Text>();
+            if (btnText != null) btnText.color = Color.black;
+            btnMainBuilding.onClick.AddListener(() => SelectBuilding(mainBuildingData));
+        }
     }
 
     private void SetupButton(Button button, BuildingData data, string buttonName)
@@ -87,6 +101,28 @@ public class ConstructionUI : MonoBehaviour
         {
             buildingPlacementSystem.SelectRoad(data);
             Debug.Log($"Selected: {data.roadName}");
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (resourceManager != null)
+        {
+            resourceManager.OnResourcesUpdated -= UpdateButtonsInteractability;
+        }
+    }
+
+    private void UpdateButtonsInteractability()
+    {
+        UpdateButtonInteractability(btnRoad, basicRoadData);
+        // Добавьте для других кнопок по необходимости
+    }
+
+    private void UpdateButtonInteractability(Button button, RoadData data)
+    {
+        if (button != null && data != null && resourceManager != null)
+        {
+            button.interactable = resourceManager.CanAfford(data.woodCost, data.oreCost, 0, 0);
         }
     }
 }

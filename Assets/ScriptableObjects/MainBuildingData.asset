@@ -10,22 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f656183e383483b4a9275b3ca7f7f46e, type: 3}
-  m_Name: Farms
+  m_Name: MainBuildingData
   m_EditorClassIdentifier: 
-  buildingName: 
+  buildingName: Town Hall
   description: 
-  woodCost: 40
-  oreCost: 0
+  woodCost: 100
+  oreCost: 50
   goldCost: 0
   foodCost: 0
   woodProduction: 0
   oreProduction: 0
   goldProduction: 0
-  foodProduction: 8
-  woodConsumption: 1
+  foodProduction: 0
+  woodConsumption: 0
   oreConsumption: 0
   foodConsumption: 0
-  maxWorkers: 4
+  maxWorkers: 10
   buildTime: 0
   buildingSprite: {fileID: 0}
-  buildingPrefab: {fileID: 6693364750050354018, guid: 5a25182d22c055e43816c64e79c5a47c, type: 3}
+  buildingPrefab: {fileID: 6693364750050354018, guid: 1871273078469d94486db74ec132096b, type: 3}
