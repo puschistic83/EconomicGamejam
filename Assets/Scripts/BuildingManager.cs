@@ -48,7 +48,8 @@ public class BuildingManager : MonoBehaviour
         int total = 0;
         foreach (Building building in allBuildings)
         {
-            if (building.isActive)
+            // ИСПРАВЛЕНО: используем isOperational вместо isActive
+            if (building.isOperational)
             {
                 switch (resourceType)
                 {
@@ -67,7 +68,8 @@ public class BuildingManager : MonoBehaviour
         int total = 0;
         foreach (Building building in allBuildings)
         {
-            if (building.isActive)
+            // ИСПРАВЛЕНО: используем isOperational вместо isActive
+            if (building.isOperational)
             {
                 switch (resourceType)
                 {
@@ -83,6 +85,20 @@ public class BuildingManager : MonoBehaviour
     public List<Building> GetAllBuildings()
     {
         return new List<Building>(allBuildings);
+    }
+
+    // ДОБАВЛЯЕМ отсутствующие методы в Building
+    public int CalculateEffectiveProduction(int baseProduction)
+    {
+        // Упрощенная версия - просто возвращаем базовое производство
+        // В реальной реализации это должно учитывать рабочих и эффективность
+        return baseProduction;
+    }
+
+    public int CalculateEffectiveConsumption(int baseConsumption)
+    {
+        // Упрощенная версия - просто возвращаем базовое потребление
+        return baseConsumption;
     }
 }
 

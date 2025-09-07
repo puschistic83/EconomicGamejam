@@ -43,9 +43,9 @@ public class UIResourceDisplay : MonoBehaviour
         if (resourceManager == null) return;
 
         // Обновляем текст для каждого ресурса
-        if (textWood != null) textWood.text = $"Wood: {resourceManager.wood}";
-        if (textOre != null) textOre.text = $"Ore: {resourceManager.ore}";
-        if (textGold != null) textGold.text = $"Gold: {resourceManager.gold}";
-        if (textFood != null) textFood.text = $"Food: {resourceManager.food}";
+        if (textWood != null) textWood.text = $"Дерево: {resourceManager.wood}";
+        if (textOre != null) textOre.text = $"Руда: {resourceManager.ore}";
+        if (textGold != null) textGold.text = $"Золото: {resourceManager.gold}";
+        if (textFood != null) textFood.text = $"Еда: {resourceManager.food}";
     }
 }

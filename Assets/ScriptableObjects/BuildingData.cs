@@ -1,6 +1,5 @@
 using UnityEngine;
 
-// —оздает меню в Assets/Create дл€ быстрого создани€ новых данных здани€
 [CreateAssetMenu(fileName = "New Building Data", menuName = "City Builder/Building Data")]
 public class BuildingData : ScriptableObject
 {
@@ -16,7 +15,7 @@ public class BuildingData : ScriptableObject
     [Header("Production (per second)")]
     public int woodProduction;
     public int oreProduction;
-    public int goldProduction; // «олото обычно генерируетс€ через налоги, но может и так
+    public int goldProduction;
     public int foodProduction;
 
     [Header("Consumption (per second)")]
@@ -24,12 +23,12 @@ public class BuildingData : ScriptableObject
     public int oreConsumption;
     public int foodConsumption;
 
-    [Header("Other Properties")]
-    public int maxWorkers; // ћаксимальное количество рабочих
-    public float buildTime; // ¬рем€ постройки в секундах
-    public Sprite buildingSprite; // —прайт дл€ этого здани€
-    public GameObject buildingPrefab; // ѕрефаб дл€ инстанцировани€
+    [Header("Worker Settings")]
+    public int maxWorkers = 0;
+    public int requiredWorkers = 0; // 0 = не требует рабочих
 
-    // ћожно добавить список зданий, которые должны быть построены дл€ разблокировки этого (технологи€)
-    // public BuildingData[] prerequisites;
+    [Header("Visuals")]
+    public Sprite buildingSprite;
+    public GameObject buildingPrefab;
+    public float buildTime = 5f;
 }

@@ -9,23 +9,26 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f656183e383483b4a9275b3ca7f7f46e, type: 3}
-  m_Name: "Lumbermill (\u041B\u0435\u0441\u043E\u043F\u0438\u043B\u043A\u0430)"
+  m_Script: {fileID: 11500000, guid: 63723cad24bd10e4fadac2f5d4d7a506, type: 3}
+  m_Name: HouseData
   m_EditorClassIdentifier: 
-  buildingName: 
+  buildingName: "\u0414\u043E\u043C"
   description: 
-  woodCost: 30
-  oreCost: 10
+  woodCost: 20
+  oreCost: 0
   goldCost: 0
   foodCost: 0
-  woodProduction: 5
+  woodProduction: 0
   oreProduction: 0
   goldProduction: 0
   foodProduction: 0
-  woodConsumption: 1
+  woodConsumption: 0
   oreConsumption: 0
-  foodConsumption: 0
-  maxWorkers: 3
-  buildTime: 0
+  foodConsumption: 2
+  maxWorkers: 0
+  requiredWorkers: 0
   buildingSprite: {fileID: 0}
-  buildingPrefab: {fileID: 6693364750050354018, guid: d40ac7948530f8747a7edf337f018238, type: 3}
+  buildingPrefab: {fileID: 6693364750050354018, guid: 0055e41759731e94fbd8bf9385da3544, type: 3}
+  buildTime: 5
+  residentsCapacity: 5
+  happinessBonus: 0.1

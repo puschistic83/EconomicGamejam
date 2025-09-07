@@ -1,171 +1,260 @@
-using UnityEngine;
 using System.Collections;
+using TMPro;
+using UnityEngine;
 
 public class Building : MonoBehaviour
 {
-    [Header("Static Data")]
+    [Header("Building Data")]
     public BuildingData data;
 
-    [Header("Dynamic Data")]
+    [Header("Current State")]
     public int currentWorkers = 0;
-    public bool isActive = true;
-    public float efficiency = 1f;
+    public bool isOperational = false;
+    public bool isConnected = false;
 
     private ResourceManager resourceManager;
     private RoadManager roadManager;
+    private WorkerManager workerManager;
     private const float productionInterval = 1f;
-    private bool canDeliverResources = false;
-    private bool isConnectedToMain = false;
 
-    public System.Action OnBuildingUpdated;
+    [Header("Visual Feedback")]
+    public TextMeshPro statusText;
+    public Renderer buildingRenderer;
+    public Material operationalMaterial;
+    public Material nonOperationalMaterial;
 
     void Start()
     {
         resourceManager = FindObjectOfType<ResourceManager>();
         roadManager = FindObjectOfType<RoadManager>();
+        workerManager = FindObjectOfType<WorkerManager>();
 
-        if (resourceManager == null) Debug.LogError("ResourceManager not found!");
-        if (roadManager == null) Debug.LogError("RoadManager not found!");
-
-        StartCoroutine(ProductionCycle());
-        CheckConnectionStatus();
-
-        if (resourceManager != null)
+        // Регистрируем дом в менеджере рабочих ЕСЛИ это дом
+        if (IsHouse() && workerManager != null)
         {
-            resourceManager.OnMainBuildingChanged += CheckConnectionStatus;
+            workerManager.RegisterHouse(this);
         }
-        if (roadManager != null)
-        {
-            roadManager.OnRoadsUpdated += CheckConnectionStatus;
-        }
+
+        // Настраиваем визуал
+        SetupVisuals();
+
+        // Запускаем проверки
+        StartCoroutine(ConnectionCheckCoroutine());
+        StartCoroutine(ProductionCoroutine());
     }
 
-    // ДОБАВЛЯЕМ ОТСУТСТВУЮЩИЙ МЕТОД Initialize
     public void Initialize(BuildingData buildingData)
     {
         data = buildingData;
 
         // Устанавливаем спрайт
-        SpriteRenderer renderer = GetComponent<SpriteRenderer>();
-        if (renderer != null && data.buildingSprite != null)
+        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null && data.buildingSprite != null)
         {
-            renderer.sprite = data.buildingSprite;
+            spriteRenderer.sprite = data.buildingSprite;
         }
 
-        // Добавляем коллайдер если его нет
+        // Добавляем коллайдер если нужно
         if (GetComponent<Collider2D>() == null)
         {
             gameObject.AddComponent<BoxCollider2D>();
         }
 
-        // Автоматически нанимаем рабочих
-        currentWorkers = data.maxWorkers;
-
-        Debug.Log($"Building initialized: {data.buildingName} with {currentWorkers} workers");
+        SetupVisuals();
     }
 
-    void OnDestroy()
+    // Проверяем, является ли здание домом
+    public bool IsHouse()
     {
-        if (resourceManager != null)
-        {
-            resourceManager.OnMainBuildingChanged -= CheckConnectionStatus;
-        }
-        if (roadManager != null)
-        {
-            roadManager.OnRoadsUpdated -= CheckConnectionStatus;
-        }
+        if (data == null) return false;
+
+        return data.buildingName.ToLower().Contains("house") ||
+               data.buildingName.ToLower().Contains("дом") ||
+               data.buildingName.ToLower().Contains("home") ||
+               data.buildingName.ToLower().Contains("жилой");
     }
 
-    private void CheckConnectionStatus()
+    private void SetupVisuals()
     {
-        if (resourceManager == null || roadManager == null) return;
-
-        // Для главного здания всегда разрешена доставка
-        if (IsMainBuilding())
+        // Создаем текст статуса если его нет
+        if (statusText == null)
         {
-            canDeliverResources = true;
-            isConnectedToMain = true;
-        }
-        else
-        {
-            // Проверяем соединение дорогами с главным зданием
-            isConnectedToMain = roadManager.IsConnectedToMainBuilding(transform.position);
+            GameObject textObj = new GameObject("StatusText");
+            textObj.transform.SetParent(transform);
+            textObj.transform.localPosition = new Vector3(0, 1.5f, 0);
 
-            // Может доставлять если соединен и в радиусе
-            canDeliverResources = isConnectedToMain &&
-                                resourceManager.HasMainBuilding &&
-                                Vector3.Distance(transform.position, resourceManager.mainBuilding.transform.position) <= resourceManager.deliveryRange;
+            statusText = textObj.AddComponent<TextMeshPro>();
+            statusText.alignment = TextAlignmentOptions.Center;
+            statusText.fontSize = 1.5f;
+            statusText.sortingOrder = 10;
         }
 
-        isActive = canDeliverResources;
-
-        Debug.Log($"{data.buildingName} - Connected: {isConnectedToMain}, Can deliver: {canDeliverResources}");
+        UpdateStatusDisplay();
     }
 
-    private bool IsMainBuilding()
+    private IEnumerator ConnectionCheckCoroutine()
     {
-        return resourceManager != null &&
-               resourceManager.HasMainBuilding &&
-               resourceManager.mainBuilding.gameObject == gameObject;
+        while (true)
+        {
+            yield return new WaitForSeconds(2f);
+            CheckConnection();
+        }
     }
 
-    IEnumerator ProductionCycle()
+    private void CheckConnection()
+    {
+        if (roadManager == null || resourceManager == null) return;
+
+        bool newConnectionStatus = roadManager.IsConnectedToMainBuilding(transform.position);
+
+        if (newConnectionStatus != isConnected)
+        {
+            isConnected = newConnectionStatus;
+            Debug.Log($"{data.buildingName} connection: {isConnected}");
+            UpdateStatusDisplay();
+
+            if (IsHouse() && workerManager != null)
+            {
+                Debug.Log($"Updating house connection for {data.buildingName}");
+                workerManager.UpdateHouseConnection(this);
+            }
+        }
+    }
+
+    private IEnumerator ProductionCoroutine()
     {
         while (true)
         {
             yield return new WaitForSeconds(productionInterval);
 
-            if (isActive && resourceManager != null && currentWorkers > 0 && canDeliverResources)
+            if (CanOperate())
             {
                 ProduceResources();
-                ConsumeResources();
             }
         }
     }
 
+    private bool CanOperate()
+    {
+        bool hasConnection = isConnected;
+        bool hasWorkers = data.requiredWorkers <= 0 || currentWorkers >= data.requiredWorkers;
+        bool isOperational = hasConnection && hasWorkers;
+
+        if (this.isOperational != isOperational)
+        {
+            this.isOperational = isOperational;
+            UpdateStatusDisplay();
+        }
+
+        return isOperational;
+    }
+
     private void ProduceResources()
     {
-        int effectiveWood = CalculateEffectiveProduction(data.woodProduction);
-        int effectiveOre = CalculateEffectiveProduction(data.oreProduction);
-        int effectiveGold = CalculateEffectiveProduction(data.goldProduction);
-        int effectiveFood = CalculateEffectiveProduction(data.foodProduction);
+        if (!isOperational || resourceManager == null) return;
 
-        if (effectiveWood > 0) resourceManager.AddResources(effectiveWood, 0, 0, 0);
-        if (effectiveOre > 0) resourceManager.AddResources(0, effectiveOre, 0, 0);
-        if (effectiveGold > 0) resourceManager.AddResources(0, 0, effectiveGold, 0);
-        if (effectiveFood > 0) resourceManager.AddResources(0, 0, 0, effectiveFood);
+        // Производство
+        if (data.woodProduction > 0)
+            resourceManager.AddResources(data.woodProduction, 0, 0, 0);
 
-        if (effectiveWood > 0 || effectiveOre > 0 || effectiveGold > 0 || effectiveFood > 0)
-        {
-            Debug.Log($"{data.buildingName} produced: W{effectiveWood}/O{effectiveOre}/G{effectiveGold}/F{effectiveFood}");
-        }
+        if (data.oreProduction > 0)
+            resourceManager.AddResources(0, data.oreProduction, 0, 0);
+
+        if (data.goldProduction > 0)
+            resourceManager.AddResources(0, 0, data.goldProduction, 0);
+
+        if (data.foodProduction > 0)
+            resourceManager.AddResources(0, 0, 0, data.foodProduction);
+
+        // Потребление
+        ConsumeResources();
     }
 
     private void ConsumeResources()
     {
         if (data.woodConsumption > 0 || data.oreConsumption > 0 || data.foodConsumption > 0)
         {
-            int effectiveWoodConsumption = CalculateEffectiveConsumption(data.woodConsumption);
-            int effectiveOreConsumption = CalculateEffectiveConsumption(data.oreConsumption);
-            int effectiveFoodConsumption = CalculateEffectiveConsumption(data.foodConsumption);
+            bool canAfford = resourceManager.CanAfford(
+                data.woodConsumption,
+                data.oreConsumption,
+                0,
+                data.foodConsumption
+            );
 
-            bool canConsume = resourceManager.CanAfford(effectiveWoodConsumption,
-                                                       effectiveOreConsumption,
-                                                       0,
-                                                       effectiveFoodConsumption);
+            if (canAfford)
+            {
+                resourceManager.SpendResources(
+                    data.woodConsumption,
+                    data.oreConsumption,
+                    0,
+                    data.foodConsumption
+                );
+            }
+        }
+    }
 
-            if (canConsume)
-            {
-                resourceManager.SpendResources(effectiveWoodConsumption,
-                                              effectiveOreConsumption,
-                                              0,
-                                              effectiveFoodConsumption);
-            }
-            else
-            {
-                efficiency = Mathf.Max(0.1f, efficiency - 0.1f);
-                Debug.Log($"{data.buildingName} efficiency decreased to {efficiency:P0} due to lack of resources");
-            }
+    public void UpdateStatusDisplay()
+    {
+        if (statusText == null) return;
+
+        string status = "";
+
+        if (!isConnected)
+        {
+            status = "No Road Connection";
+            statusText.color = Color.red;
+        }
+        else if (IsHouse() && currentWorkers < GetHouseCapacity())
+        {
+            status = $"Workers: {currentWorkers}/{GetHouseCapacity()}";
+            statusText.color = Color.yellow;
+        }
+        else if (data.requiredWorkers > 0 && currentWorkers < data.requiredWorkers)
+        {
+            status = $"Need Workers: {currentWorkers}/{data.requiredWorkers}";
+            statusText.color = Color.yellow;
+        }
+        else
+        {
+            status = "Operational";
+            statusText.color = Color.green;
+        }
+
+        statusText.text = $"{data.buildingName}\n{status}";
+
+        if (buildingRenderer != null)
+        {
+            buildingRenderer.material = isOperational ? operationalMaterial : nonOperationalMaterial;
+        }
+    }
+
+    // Метод для получения вместимости дома из WorkerManager
+    private int GetHouseCapacity()
+    {
+        if (workerManager != null && IsHouse())
+        {
+            return workerManager.workersPerHouse;
+        }
+        return data.maxWorkers;
+    }
+
+    public void AssignWorker()
+    {
+        if (currentWorkers < data.maxWorkers)
+        {
+            currentWorkers++;
+            UpdateStatusDisplay();
+            Debug.Log($"Worker assigned to {data.buildingName}. Total: {currentWorkers}");
+        }
+    }
+
+    public void RemoveWorker()
+    {
+        if (currentWorkers > 0)
+        {
+            currentWorkers--;
+            UpdateStatusDisplay();
+            Debug.Log($"Worker removed from {data.buildingName}. Total: {currentWorkers}");
         }
     }
 
@@ -173,65 +262,33 @@ public class Building : MonoBehaviour
     {
         if (baseProduction == 0) return 0;
 
-        float workerFactor = (float)currentWorkers / data.maxWorkers;
-        return Mathf.RoundToInt(baseProduction * workerFactor * efficiency);
+        // Простой расчет: если здание работает, производим ресурсы
+        return isOperational ? baseProduction : 0;
     }
 
     public int CalculateEffectiveConsumption(int baseConsumption)
     {
         if (baseConsumption == 0) return 0;
 
-        float workerFactor = (float)currentWorkers / data.maxWorkers;
-        return Mathf.RoundToInt(baseConsumption * workerFactor);
+        // Простой расчет: если здание работает, потребляем ресурсы
+        return isOperational ? baseConsumption : 0;
     }
 
     void OnMouseDown()
     {
-        string statusMessage = $"Selected: {data.buildingName}\n" +
-                              $"Workers: {currentWorkers}/{data.maxWorkers}\n" +
-                              $"Efficiency: {efficiency:P0}\n" +
-                              $"Connected to main: {isConnectedToMain}\n" +
-                              $"Can deliver: {canDeliverResources}";
-
-        if (resourceManager != null && resourceManager.HasMainBuilding)
-        {
-            float distance = Vector3.Distance(transform.position, resourceManager.mainBuilding.transform.position);
-            statusMessage += $"\nDistance to main: {distance:F1}m (Range: {resourceManager.deliveryRange}m)";
-        }
-
-        Debug.Log(statusMessage);
+        Debug.Log($"Building: {data.buildingName}\n" +
+                 $"Workers: {currentWorkers}/{data.maxWorkers}\n" +
+                 $"Connected: {isConnected}\n" +
+                 $"Operational: {isOperational}");
     }
 
-    public int GetCurrentProduction(ResourceType resourceType)
+    void OnDestroy()
     {
-        switch (resourceType)
+        // Убираем дом из менеджера при уничтожении
+        if (IsHouse() && workerManager != null)
         {
-            case ResourceType.Wood: return CalculateEffectiveProduction(data.woodProduction);
-            case ResourceType.Ore: return CalculateEffectiveProduction(data.oreProduction);
-            case ResourceType.Gold: return CalculateEffectiveProduction(data.goldProduction);
-            case ResourceType.Food: return CalculateEffectiveProduction(data.foodProduction);
-            default: return 0;
+            workerManager.UnregisterHouse(this);
         }
     }
-
-    public int GetCurrentConsumption(ResourceType resourceType)
-    {
-        switch (resourceType)
-        {
-            case ResourceType.Wood: return CalculateEffectiveConsumption(data.woodConsumption);
-            case ResourceType.Ore: return CalculateEffectiveConsumption(data.oreConsumption);
-            case ResourceType.Food: return CalculateEffectiveConsumption(data.foodConsumption);
-            default: return 0;
-        }
-    }
-
-    public bool IsConnectedToMain()
-    {
-        return isConnectedToMain;
-    }
-
-    public bool IsInDeliveryRange()
-    {
-        return canDeliverResources;
-    }
+    
 }
